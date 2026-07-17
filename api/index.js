@@ -29,10 +29,14 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(
-        new Error(`Origin is not allowed by CORS: ${origin}`)
-      );
-    }
+      console.warn("Blocked by CORS:", origin);
+    console.warn("Allowed origins:", allowedOrigins);
+
+      return callback(null, false);
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+    
   })
 );
 
