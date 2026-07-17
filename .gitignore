@@ -1,0 +1,21 @@
+# dependencies
+api/node_modules/
+web/node_modules/
+
+# environment variables
+api/.env
+api/.env.*
+web/.env
+web/.env.*
+
+# Next.js
+web/.next/
+web/out/
+
+# generated files
+api/public/generated/
+api/public/assets/
+api/public/exports/
+
+# OS
+.DS_Store
