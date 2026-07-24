@@ -68,7 +68,7 @@ app.get("/", (req, res) => {
 });
 
 // LP画像生成API
-app.post("/generate-lp", (req, res) => {
+app.post("/projects", (req, res) => {
   const { serviceName, concept, targetUser, tone, mainMessage } = req.body;
 
   if (!concept || typeof concept !== "string") {
@@ -157,7 +157,7 @@ app.get("/projects/:id", (req, res) => {
 });
 
 // グリッド分割API
-app.post("/split-grid", (req, res) => {
+app.post("/grid-splits", (req, res) => {
   const { imageUrl, imageWidth, imageHeight, rows, cols } = req.body;
 
   if (!imageUrl || typeof imageUrl !== "string") {
@@ -506,7 +506,7 @@ async function createZipFromDirectory(sourceDir, zipPath) {
   await fs.writeFile(zipPath, zipBuffer);
 }
 
-app.post("/projects/:id/generate-asset-sheet", async (req, res) => {
+app.post("/projects/:id/asset-sheets", async (req, res) => {
   const id = Number(req.params.id);
   const project = projects.find((p) => p.id === id);
 
@@ -644,7 +644,7 @@ app.get("/projects", (req, res) => {
   });
 });
 
-app.post("/projects/:id/generate-image", async (req, res) => {
+app.post("/projects/:id/lp-images", async (req, res) => {
   const id = Number(req.params.id);
   const project = projects.find((p) => p.id === id);
 
@@ -746,7 +746,7 @@ app.post("/projects/:id/generate-image", async (req, res) => {
   }
 });
 
-app.post("/projects/:id/export-assets", async (req, res) => {
+app.post("/projects/:id/assets-exports", async (req, res) => {
   const id = Number(req.params.id);
   const project = projects.find((p) => p.id === id);
 
