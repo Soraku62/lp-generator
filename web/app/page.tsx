@@ -100,7 +100,7 @@ export default function Home() {
       // 1. LPプロジェクト作成
       setCurrentStep("1/5 Creating LP project...");
 
-      const createResponse = await fetch(`${API_BASE_URL}/generate-lp`, {
+      const createResponse = await fetch(`${API_BASE_URL}/projects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -129,7 +129,7 @@ export default function Home() {
       setCurrentStep("2/5 Generating LP image...");
 
       const imageResponse = await fetch(
-        `${API_BASE_URL}/projects/${newProjectId}/generate-image`,
+        `${API_BASE_URL}/projects/${newProjectId}/lp-images`,
         {
           method: "POST",
           headers: {
@@ -156,7 +156,7 @@ export default function Home() {
       setCurrentStep("3/5 Generating asset sheet...");
 
       const assetSheetResponse = await fetch(
-        `${API_BASE_URL}/projects/${newProjectId}/generate-asset-sheet`,
+        `${API_BASE_URL}/projects/${newProjectId}/asset-sheets`,
         {
           method: "POST",
           headers: {
@@ -182,7 +182,7 @@ export default function Home() {
       // 4. 素材シートをグリッド分割
       setCurrentStep("4/5 Splitting asset sheet into grid cells...");
 
-      const splitResponse = await fetch(`${API_BASE_URL}/split-grid`, {
+      const splitResponse = await fetch(`${API_BASE_URL}/grid-splits`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -211,7 +211,7 @@ export default function Home() {
       setCurrentStep("5/5 Exporting transparent PNG assets...");
 
       const exportResponse = await fetch(
-        `${API_BASE_URL}/projects/${newProjectId}/export-assets`,
+        `${API_BASE_URL}/projects/${newProjectId}/asset-exports`,
         {
           method: "POST",
           headers: {
