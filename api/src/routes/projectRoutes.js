@@ -3,7 +3,8 @@ const express = require("express");
 const {
   createProject,
   getAllProjects,
-  findProjectById
+  findProjectById,
+  updateProject
 } = require("../store/projectStore");
 
 const {
@@ -164,20 +165,24 @@ router.post(
         filePrefix: String(project.id)
       });
 
-      project.generatedImageUrl =
+      const imageUrl =
         `${getBaseUrl()}/generated/${fileName}`;
 
-      project.generatedAt =
+      const generatedAt =
         new Date().toISOString();
 
-      project.imageModel = model;
+      updateProject(project.id, {
+        generatedImageUrl: imageUrl,
+        generatedAt,
+        imageModel: model
+      });
 
       return sendSuccess(res, {
         id: project.id,
-        imageUrl: project.generatedImageUrl,
+        imageUrl,
         model,
         prompt: project.prompt,
-        generatedAt: project.generatedAt
+        generatedAt
       });
     } catch (error) {
       return sendCaughtError(
@@ -235,31 +240,33 @@ router.post(
           `assetsheet-${project.id}`
       });
 
-      project.assetSheetUrl =
+      const assetSheetUrl =
         `${getBaseUrl()}/generated/${fileName}`;
 
-      project.assetSheetPrompt =
-        assetSheetPrompt;
-
-      project.assetSheetGeneratedAt =
+      const assetSheetGeneratedAt =
         new Date().toISOString();
 
-      project.assetSheetGrid = {
+      const assetSheetGrid = {
         rows: 4,
         cols: 4,
         imageWidth: 1024,
         imageHeight: 1024
       };
 
+      updateProject(project.id, {
+        assetSheetUrl,
+        assetSheetPrompt,
+        assetSheetGeneratedAt,
+        assetSheetGrid
+      });
+
       return sendSuccess(res, {
         id: project.id,
-        assetSheetUrl:
-          project.assetSheetUrl,
+        assetSheetUrl,
         model,
         prompt: assetSheetPrompt,
-        grid: project.assetSheetGrid,
-        generatedAt:
-          project.assetSheetGeneratedAt
+        grid: assetSheetGrid,
+        generatedAt: assetSheetGeneratedAt
       });
     } catch (error) {
       return sendCaughtError(
@@ -307,14 +314,11 @@ router.post(
       const result =
         await exportProjectAssets(project);
 
-      project.exportedAssets =
-        result.assets;
-
-      project.assetsZipUrl =
-        result.zipUrl;
-
-      project.assetsExportedAt =
-        result.exportedAt;
+      updateProject(project.id, {
+        exportedAssets: result.assets,
+        assetsZipUrl: result.zipUrl,
+        assetsExportedAt: result.exportedAt
+      });
 
       return sendSuccess(res, {
         projectId: project.id,
