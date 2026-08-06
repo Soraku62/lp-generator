@@ -117,6 +117,7 @@ function createProject(projectData) {
       tone,
       main_message,
       prompt,
+      access_token_hash,
 
       generated_image_url,
       generated_at,
@@ -135,7 +136,7 @@ function createProject(projectData) {
       updated_at
     )
     VALUES (
-      ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?,
@@ -150,6 +151,7 @@ function createProject(projectData) {
     projectData.tone,
     projectData.mainMessage,
     projectData.prompt,
+    projectData.accessTokenHash,
 
     projectData.generatedImageUrl ?? null,
     projectData.generatedAt ?? null,
@@ -211,6 +213,32 @@ function findProjectById(id) {
     .get(numericId);
 
   return rowToProject(row);
+}
+
+function findProjectAccessById(id) {
+  const numericId = Number(id);
+
+  if (!Number.isInteger(numericId)) {
+    return undefined;
+  }
+
+  const row = database
+    .prepare(`
+      SELECT *
+      FROM projects
+      WHERE id = ?
+    `)
+    .get(numericId);
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    project: rowToProject(row),
+    accessTokenHash:
+      row.access_token_hash
+  };
 }
 
 /**
@@ -357,5 +385,6 @@ module.exports = {
   createProject,
   getAllProjects,
   findProjectById,
+  findProjectAccessById,
   updateProject
 };

@@ -3,7 +3,6 @@ const express = require("express");
 const {
   createProject,
   getAllProjects,
-  findProjectById,
   updateProject
 } = require("../store/projectStore");
 
@@ -28,6 +27,15 @@ const {
   sendError,
   sendCaughtError
 } = require("../utils/apiResponse");
+
+const {
+  generateProjectToken,
+  hashProjectToken
+} = require("../security/projectToken");
+
+const {
+  requireProjectAccess
+} = require("../middleware/requireProjectAccess");
 
 const router = express.Router();
 
@@ -93,67 +101,57 @@ router.post("/", (req, res) => {
       "A clear and engaging landing page"
   };
 
+  const accessToken =
+  generateProjectToken();
+
+  const accessTokenHash =
+  hashProjectToken(accessToken);
+
   const project = createProject({
     ...normalizedProjectData,
 
     prompt: buildLpPrompt(
       normalizedProjectData
     ),
-
+    accessTokenHash,
     generatedImageUrl: null
   });
 
-  return sendSuccess(res, project);
+  return sendSuccess(
+  res,
+  {
+    ...project,
+    accessToken
+  },
+  201
+);
 });
 
 // GET /projects
-router.get("/", (req, res) => {
-  return sendSuccess(
-    res,
-    getAllProjects()
-  );
-});
+if (process.env.NODE_ENV !== "production") {
+  router.get("/", (req, res) => {
+    return sendSuccess(
+      res,
+      getAllProjects()
+    );
+  });
+}
 
 // GET /projects/:id
-router.get("/:id", (req, res) => {
-  const id = Number(req.params.id);
-
-  const project = findProjectById(id);
-
-  if (!project) {
-    return sendError(
+router.get("/:id", requireProjectAccess,(req, res) => {
+  return sendSuccess(
       res,
-      404,
-      "PROJECT_NOT_FOUND",
-      "Project not found.",
-      {
-        id
-      }
+      req.project
     );
-  }
-
-  return sendSuccess(res, project);
 });
 
 // POST /projects/:id/lp-images
+// POST /projects/:id/lp-images
 router.post(
   "/:id/lp-images",
+  requireProjectAccess,
   async (req, res) => {
-    const id = Number(req.params.id);
-
-    const project = findProjectById(id);
-
-    if (!project) {
-      return sendError(
-        res,
-        404,
-        "PROJECT_NOT_FOUND",
-        "Project not found.",
-        {
-          id
-        }
-      );
-    }
+    const project = req.project;
 
     try {
       const {
@@ -195,24 +193,12 @@ router.post(
 );
 
 // POST /projects/:id/asset-sheets
+// POST /projects/:id/asset-sheets
 router.post(
   "/:id/asset-sheets",
+  requireProjectAccess,
   async (req, res) => {
-    const id = Number(req.params.id);
-
-    const project = findProjectById(id);
-
-    if (!project) {
-      return sendError(
-        res,
-        404,
-        "PROJECT_NOT_FOUND",
-        "Project not found.",
-        {
-          id
-        }
-      );
-    }
+    const project = req.project;
 
     if (!project.generatedImageUrl) {
       return sendError(
@@ -221,7 +207,7 @@ router.post(
         "IMAGE_NOT_GENERATED",
         "Generate the landing page image before generating an asset sheet.",
         {
-          id
+          id: project.id
         }
       );
     }
@@ -236,8 +222,7 @@ router.post(
       } = await generateCloudflareImage({
         prompt: assetSheetPrompt,
         steps: 4,
-        filePrefix:
-          `assetsheet-${project.id}`
+        filePrefix: `assetsheet-${project.id}`
       });
 
       const assetSheetUrl =
@@ -279,24 +264,12 @@ router.post(
 );
 
 // POST /projects/:id/assets-exports
+// POST /projects/:id/asset-exports
 router.post(
   "/:id/asset-exports",
+  requireProjectAccess,
   async (req, res) => {
-    const id = Number(req.params.id);
-
-    const project = findProjectById(id);
-
-    if (!project) {
-      return sendError(
-        res,
-        404,
-        "PROJECT_NOT_FOUND",
-        "Project not found.",
-        {
-          id
-        }
-      );
-    }
+    const project = req.project;
 
     if (!project.assetSheetUrl) {
       return sendError(
@@ -305,7 +278,7 @@ router.post(
         "ASSET_SHEET_NOT_GENERATED",
         "Generate the asset sheet before exporting assets.",
         {
-          id
+          id: project.id
         }
       );
     }

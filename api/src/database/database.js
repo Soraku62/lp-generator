@@ -37,6 +37,7 @@ database.exec(`
     tone TEXT NOT NULL,
     main_message TEXT NOT NULL,
     prompt TEXT NOT NULL,
+    access_token_hash TEXT,
 
     generated_image_url TEXT,
     generated_at TEXT,
@@ -55,6 +56,30 @@ database.exec(`
     updated_at TEXT NOT NULL
   );
 `);
+
+// 既存のprojectsテーブルに
+// access_token_hash列があるか確認する
+const projectColumns = database
+  .prepare("PRAGMA table_info(projects)")
+  .all();
+
+const hasAccessTokenHash =
+  projectColumns.some(
+    (column) =>
+      column.name === "access_token_hash"
+  );
+
+// 古いDBには列がないため追加する
+if (!hasAccessTokenHash) {
+  database.exec(`
+    ALTER TABLE projects
+    ADD COLUMN access_token_hash TEXT
+  `);
+
+  console.log(
+    "Added access_token_hash column to projects table."
+  );
+}
 
 console.log(
   `SQLite database connected: ${DATABASE_PATH}`

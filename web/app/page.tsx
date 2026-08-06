@@ -1,17 +1,52 @@
 "use client";
 
 import { useState } from "react";
+import type {
+  CSSProperties,
+  ReactNode
+} from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL;
 
-type ApiResult = {
-  success: boolean;
-  data: any;
-  error: null | {
-    code: string;
-    message: string;
-    details?: any;
-  };
+type ApiError = {
+  code: string;
+  message: string;
+  details?: Record<string, unknown> | null;
+};
+
+type ApiResult<T> =
+  | {
+      success: true;
+      data: T;
+      error: null;
+    }
+  | {
+      success: false;
+      data: null;
+      error: ApiError;
+    };
+
+type ProjectCreateData = {
+  id: number;
+  accessToken: string;
+};
+
+type ImageGenerationData = {
+  id: number;
+  imageUrl: string;
+  model: string;
+  prompt: string;
+  generatedAt: string;
+};
+
+type AssetSheetGenerationData = {
+  id: number;
+  assetSheetUrl: string;
+  model: string;
+  prompt: string;
+  grid: GridInfo;
+  generatedAt: string;
 };
 
 type GridCell = {
@@ -22,6 +57,21 @@ type GridCell = {
   y: number;
   width: number;
   height: number;
+};
+
+type GridInfo = {
+  rows: number;
+  cols: number;
+  imageWidth: number;
+  imageHeight: number;
+  cellWidth: number;
+  cellHeight: number;
+};
+
+type GridSplitData = {
+  imageUrl: string;
+  grid: GridInfo;
+  cells: GridCell[];
 };
 
 type ExportedAsset = {
@@ -36,46 +86,123 @@ type ExportedAsset = {
   imageUrl: string;
 };
 
-async function readJsonResponse(response: Response): Promise<ApiResult> {
+type AssetExportData = {
+  projectId: number;
+  assets: ExportedAsset[];
+  zipUrl: string;
+  exportedAt: string;
+};
+
+async function readJsonResponse<T>(
+  response: Response
+): Promise<ApiResult<T>> {
   const text = await response.text();
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as ApiResult<T>;
   } catch {
     throw new Error(
-      `API did not return JSON. Status: ${response.status}. Response preview: ${text.slice(
-        0,
-        200
-      )}`
+      `API did not return JSON. Status: ${
+        response.status
+      }. Response preview: ${text.slice(0, 200)}`
     );
   }
 }
 
+function getApiErrorMessage(
+  result: ApiResult<unknown>,
+  fallbackMessage: string
+): string {
+  if (result.success) {
+    return fallbackMessage;
+  }
+
+  const details = result.error.details;
+
+  if (
+    details &&
+    typeof details === "object"
+  ) {
+    const body = details.body;
+
+    if (
+      typeof body === "string" &&
+      body.trim()
+    ) {
+      return body;
+    }
+
+    const message = details.message;
+
+    if (
+      typeof message === "string" &&
+      message.trim()
+    ) {
+      return message;
+    }
+  }
+
+  return (
+    result.error.message ||
+    fallbackMessage
+  );
+}
+
 export default function Home() {
-  const [serviceName, setServiceName] = useState("aiment");
+  const [serviceName, setServiceName] =
+    useState("aiment");
+
   const [concept, setConcept] = useState(
     "A service where Japanese learners can practice conversation in a fun and natural way."
   );
-  const [targetUser, setTargetUser] = useState(
-    "International Japanese learners who want speaking practice."
+
+  const [targetUser, setTargetUser] =
+    useState(
+      "International Japanese learners who want speaking practice."
+    );
+
+  const [tone, setTone] = useState(
+    "modern, soft, futuristic, clean"
   );
-  const [tone, setTone] = useState("modern, soft, futuristic, clean");
-  const [mainMessage, setMainMessage] = useState(
-    "Learn Japanese by speaking, not just studying."
-  );
 
-  const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState("");
-  const [error, setError] = useState("");
+  const [mainMessage, setMainMessage] =
+    useState(
+      "Learn Japanese by speaking, not just studying."
+    );
 
-  const [projectId, setProjectId] = useState<number | null>(null);
-  const [lpImageUrl, setLpImageUrl] = useState("");
-  const [assetSheetUrl, setAssetSheetUrl] = useState("");
-  const [gridCells, setGridCells] = useState<GridCell[]>([]);
-  const [gridInfo, setGridInfo] = useState<any>(null);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [exportedAssets, setExportedAssets] = useState<ExportedAsset[]>([]);
-  const [zipUrl, setZipUrl] = useState("");
+  const [currentStep, setCurrentStep] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  const [projectId, setProjectId] =
+    useState<number | null>(null);
+
+  const [lpImageUrl, setLpImageUrl] =
+    useState("");
+
+  const [
+    assetSheetUrl,
+    setAssetSheetUrl
+  ] = useState("");
+
+  const [gridCells, setGridCells] =
+    useState<GridCell[]>([]);
+
+  const [gridInfo, setGridInfo] =
+    useState<GridInfo | null>(null);
+
+  const [
+    exportedAssets,
+    setExportedAssets
+  ] = useState<ExportedAsset[]>([]);
+
+  const [zipUrl, setZipUrl] =
+    useState("");
 
   async function handleGenerateAll() {
     setLoading(true);
@@ -97,146 +224,263 @@ export default function Home() {
         );
       }
 
-      // 1. LPプロジェクト作成
-      setCurrentStep("1/5 Creating LP project...");
+      /*
+       * 1. プロジェクト作成
+       *
+       * このAPIだけは、まだトークンを
+       * 持っていないため認証ヘッダー不要。
+       */
+      setCurrentStep(
+        "1/5 Creating LP project..."
+      );
 
-      const createResponse = await fetch(`${API_BASE_URL}/projects`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          serviceName,
-          concept,
-          targetUser,
-          tone,
-          mainMessage
-        })
-      });
+      const createResponse = await fetch(
+        `${API_BASE_URL}/projects`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            serviceName,
+            concept,
+            targetUser,
+            tone,
+            mainMessage
+          })
+        }
+      );
 
-      const createResult = await readJsonResponse(createResponse);
+      const createResult =
+        await readJsonResponse<ProjectCreateData>(
+          createResponse
+        );
 
       if (!createResult.success) {
         throw new Error(
-          createResult.error?.message || "Failed to create LP project."
+          getApiErrorMessage(
+            createResult,
+            "Failed to create LP project."
+          )
         );
       }
 
-      const newProjectId = createResult.data.id;
+      const newProjectId =
+        createResult.data.id;
+
+      const projectAccessToken =
+        createResult.data.accessToken;
+
+      if (
+        !Number.isInteger(newProjectId)
+      ) {
+        throw new Error(
+          "API did not return a valid project ID."
+        );
+      }
+
+      if (
+        typeof projectAccessToken !==
+          "string" ||
+        !projectAccessToken
+      ) {
+        throw new Error(
+          "API did not return a project access token."
+        );
+      }
+
       setProjectId(newProjectId);
 
-      // 2. LP画像生成
-      setCurrentStep("2/5 Generating LP image...");
+      /*
+       * このプロジェクト専用のヘッダー。
+       *
+       * lp-images
+       * asset-sheets
+       * asset-exports
+       *
+       * の3つへ毎回送る。
+       */
+      const projectHeaders = {
+        "Content-Type":
+          "application/json",
+        "X-Project-Token":
+          projectAccessToken
+      };
+
+      /*
+       * 2. LP画像生成
+       */
+      setCurrentStep(
+        "2/5 Generating LP image..."
+      );
 
       const imageResponse = await fetch(
         `${API_BASE_URL}/projects/${newProjectId}/lp-images`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: projectHeaders,
           body: JSON.stringify({})
         }
       );
 
-      const imageResult = await readJsonResponse(imageResponse);
+      const imageResult =
+        await readJsonResponse<ImageGenerationData>(
+          imageResponse
+        );
 
       if (!imageResult.success) {
         throw new Error(
-          imageResult.error?.details?.body ||
-            imageResult.error?.message ||
+          getApiErrorMessage(
+            imageResult,
             "Failed to generate LP image."
+          )
         );
       }
 
-      const newLpImageUrl = imageResult.data.imageUrl;
+      const newLpImageUrl =
+        imageResult.data.imageUrl;
+
       setLpImageUrl(newLpImageUrl);
 
-      // 3. 素材シート生成
-      setCurrentStep("3/5 Generating asset sheet...");
-
-      const assetSheetResponse = await fetch(
-        `${API_BASE_URL}/projects/${newProjectId}/asset-sheets`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({})
-        }
+      /*
+       * 3. 素材シート生成
+       */
+      setCurrentStep(
+        "3/5 Generating asset sheet..."
       );
 
-      const assetSheetResult = await readJsonResponse(assetSheetResponse);
+      const assetSheetResponse =
+        await fetch(
+          `${API_BASE_URL}/projects/${newProjectId}/asset-sheets`,
+          {
+            method: "POST",
+            headers: projectHeaders,
+            body: JSON.stringify({})
+          }
+        );
+
+      const assetSheetResult =
+        await readJsonResponse<AssetSheetGenerationData>(
+          assetSheetResponse
+        );
 
       if (!assetSheetResult.success) {
         throw new Error(
-          assetSheetResult.error?.details?.body ||
-            assetSheetResult.error?.message ||
+          getApiErrorMessage(
+            assetSheetResult,
             "Failed to generate asset sheet."
+          )
         );
       }
 
-      const newAssetSheetUrl = assetSheetResult.data.assetSheetUrl;
-      setAssetSheetUrl(newAssetSheetUrl);
+      const newAssetSheetUrl =
+        assetSheetResult.data
+          .assetSheetUrl;
 
-      // 4. 素材シートをグリッド分割
-      setCurrentStep("4/5 Splitting asset sheet into grid cells...");
+      setAssetSheetUrl(
+        newAssetSheetUrl
+      );
 
-      const splitResponse = await fetch(`${API_BASE_URL}/grid-splits`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          imageUrl: newAssetSheetUrl,
-          imageWidth: 1024,
-          imageHeight: 1024,
-          rows: 4,
-          cols: 4
-        })
-      });
+      /*
+       * 4. グリッド情報を計算
+       *
+       * このAPIはプロジェクト固有情報を
+       * 取得しないためトークン不要。
+       */
+      setCurrentStep(
+        "4/5 Splitting asset sheet into grid cells..."
+      );
 
-      const splitResult = await readJsonResponse(splitResponse);
+      const splitResponse = await fetch(
+        `${API_BASE_URL}/grid-splits`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            imageUrl:
+              newAssetSheetUrl,
+            imageWidth: 1024,
+            imageHeight: 1024,
+            rows: 4,
+            cols: 4
+          })
+        }
+      );
+
+      const splitResult =
+        await readJsonResponse<GridSplitData>(
+          splitResponse
+        );
 
       if (!splitResult.success) {
         throw new Error(
-          splitResult.error?.message || "Failed to split asset sheet."
+          getApiErrorMessage(
+            splitResult,
+            "Failed to split asset sheet."
+          )
         );
       }
 
-      setGridCells(splitResult.data.cells);
-      setGridInfo(splitResult.data.grid);
+      setGridCells(
+        splitResult.data.cells
+      );
 
-      // 5. 透過PNG素材とZIPを書き出し
-      setCurrentStep("5/5 Exporting transparent PNG assets...");
+      setGridInfo(
+        splitResult.data.grid
+      );
+
+      /*
+       * 5. PNG素材とZIPを書き出す
+       */
+      setCurrentStep(
+        "5/5 Exporting transparent PNG assets..."
+      );
 
       const exportResponse = await fetch(
         `${API_BASE_URL}/projects/${newProjectId}/asset-exports`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: projectHeaders,
           body: JSON.stringify({})
         }
       );
 
-      const exportResult = await readJsonResponse(exportResponse);
+      const exportResult =
+        await readJsonResponse<AssetExportData>(
+          exportResponse
+        );
 
       if (!exportResult.success) {
         throw new Error(
-          exportResult.error?.details?.message ||
-            exportResult.error?.message ||
+          getApiErrorMessage(
+            exportResult,
             "Failed to export assets."
+          )
         );
       }
 
-      setExportedAssets(exportResult.data.assets);
-      setZipUrl(exportResult.data.zipUrl);
+      setExportedAssets(
+        exportResult.data.assets
+      );
+
+      setZipUrl(
+        exportResult.data.zipUrl
+      );
 
       setCurrentStep("Done");
-    } catch (err: any) {
-      setError(err.message || "Something went wrong.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(
+          "Something went wrong."
+        );
+      }
+
       setCurrentStep("Failed");
     } finally {
       setLoading(false);
@@ -269,7 +513,8 @@ export default function Home() {
               display: "inline-block",
               margin: "0 0 12px",
               padding: "6px 12px",
-              border: "1px solid rgba(125, 211, 252, 0.35)",
+              border:
+                "1px solid rgba(125, 211, 252, 0.35)",
               borderRadius: 999,
               color: "#7dd3fc",
               fontSize: 13
@@ -281,12 +526,14 @@ export default function Home() {
           <h1
             style={{
               margin: 0,
-              fontSize: "clamp(36px, 6vw, 72px)",
+              fontSize:
+                "clamp(36px, 6vw, 72px)",
               letterSpacing: "-0.06em",
               lineHeight: 0.95
             }}
           >
-            Generate. Assetize. Split. Export.
+            Generate. Assetize. Split.
+            Export.
           </h1>
 
           <p
@@ -298,8 +545,11 @@ export default function Home() {
               lineHeight: 1.7
             }}
           >
-            Generate a landing page image, recreate it as an asset sheet, split
-            the sheet into grid-based cells, export transparent PNG assets, and
+            Generate a landing page
+            image, recreate it as an
+            asset sheet, split the sheet
+            into grid-based cells, export
+            transparent PNG assets, and
             download them as a ZIP.
           </p>
         </section>
@@ -307,7 +557,8 @@ export default function Home() {
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(300px, 420px) 1fr",
+            gridTemplateColumns:
+              "minmax(300px, 420px) 1fr",
             gap: 24,
             alignItems: "start"
           }}
@@ -315,20 +566,39 @@ export default function Home() {
           <div
             style={{
               padding: 22,
-              border: "1px solid rgba(148, 163, 184, 0.22)",
+              border:
+                "1px solid rgba(148, 163, 184, 0.22)",
               borderRadius: 24,
-              background: "rgba(15, 23, 42, 0.72)",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.28)"
+              background:
+                "rgba(15, 23, 42, 0.72)",
+              boxShadow:
+                "0 24px 80px rgba(0,0,0,0.28)"
             }}
           >
-            <h2 style={{ margin: "0 0 18px", fontSize: 22 }}>Input</h2>
+            <h2
+              style={{
+                margin: "0 0 18px",
+                fontSize: 22
+              }}
+            >
+              Input
+            </h2>
 
-            <div style={{ display: "grid", gap: 14 }}>
+            <div
+              style={{
+                display: "grid",
+                gap: 14
+              }}
+            >
               <label style={labelStyle}>
                 Service Name
                 <input
                   value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
+                  onChange={(event) =>
+                    setServiceName(
+                      event.target.value
+                    )
+                  }
                   style={inputStyle}
                 />
               </label>
@@ -337,7 +607,11 @@ export default function Home() {
                 Concept
                 <textarea
                   value={concept}
-                  onChange={(e) => setConcept(e.target.value)}
+                  onChange={(event) =>
+                    setConcept(
+                      event.target.value
+                    )
+                  }
                   rows={4}
                   style={textareaStyle}
                 />
@@ -347,7 +621,11 @@ export default function Home() {
                 Target User
                 <textarea
                   value={targetUser}
-                  onChange={(e) => setTargetUser(e.target.value)}
+                  onChange={(event) =>
+                    setTargetUser(
+                      event.target.value
+                    )
+                  }
                   rows={3}
                   style={textareaStyle}
                 />
@@ -357,7 +635,11 @@ export default function Home() {
                 Tone
                 <input
                   value={tone}
-                  onChange={(e) => setTone(e.target.value)}
+                  onChange={(event) =>
+                    setTone(
+                      event.target.value
+                    )
+                  }
                   style={inputStyle}
                 />
               </label>
@@ -366,14 +648,20 @@ export default function Home() {
                 Main Message
                 <textarea
                   value={mainMessage}
-                  onChange={(e) => setMainMessage(e.target.value)}
+                  onChange={(event) =>
+                    setMainMessage(
+                      event.target.value
+                    )
+                  }
                   rows={3}
                   style={textareaStyle}
                 />
               </label>
 
               <button
-                onClick={handleGenerateAll}
+                onClick={
+                  handleGenerateAll
+                }
                 disabled={loading}
                 style={{
                   marginTop: 8,
@@ -386,8 +674,11 @@ export default function Home() {
                   color: "white",
                   fontWeight: 800,
                   fontSize: 15,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  boxShadow: "0 16px 40px rgba(59,130,246,0.35)"
+                  cursor: loading
+                    ? "not-allowed"
+                    : "pointer",
+                  boxShadow:
+                    "0 16px 40px rgba(59,130,246,0.35)"
                 }}
               >
                 {loading
@@ -399,7 +690,11 @@ export default function Home() {
                 <p
                   style={{
                     margin: "4px 0 0",
-                    color: currentStep === "Failed" ? "#fca5a5" : "#7dd3fc",
+                    color:
+                      currentStep ===
+                      "Failed"
+                        ? "#fca5a5"
+                        : "#7dd3fc",
                     fontSize: 13
                   }}
                 >
@@ -426,7 +721,8 @@ export default function Home() {
                     margin: "8px 0 0",
                     padding: 12,
                     borderRadius: 12,
-                    background: "rgba(127, 29, 29, 0.35)",
+                    background:
+                      "rgba(127, 29, 29, 0.35)",
                     color: "#fecaca",
                     fontSize: 12,
                     lineHeight: 1.5
@@ -438,10 +734,19 @@ export default function Home() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: 24 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 24
+            }}
+          >
             <PreviewCard title="Landing Page Image">
               {lpImageUrl ? (
-                <img src={lpImageUrl} alt="Generated LP" style={imageStyle} />
+                <img
+                  src={lpImageUrl}
+                  alt="Generated LP"
+                  style={imageStyle}
+                />
               ) : (
                 <EmptyPreview text="LP image will appear here." />
               )}
@@ -449,111 +754,182 @@ export default function Home() {
 
             <PreviewCard title="Asset Sheet">
               {assetSheetUrl ? (
-                <div style={{ position: "relative", width: "100%" }}>
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%"
+                  }}
+                >
                   <img
                     src={assetSheetUrl}
                     alt="Generated asset sheet"
                     style={imageStyle}
                   />
 
-                  {gridCells.map((cell) => (
-                    <div
-                      key={cell.id}
-                      title={cell.id}
-                      style={{
-                        position: "absolute",
-                        left: `${(cell.x / 1024) * 100}%`,
-                        top: `${(cell.y / 1024) * 100}%`,
-                        width: `${(cell.width / 1024) * 100}%`,
-                        height: `${(cell.height / 1024) * 100}%`,
-                        border: "1px solid rgba(56, 189, 248, 0.8)",
-                        boxSizing: "border-box",
-                        pointerEvents: "none"
-                      }}
-                    >
-                      <span
+                  {gridCells.map(
+                    (cell) => (
+                      <div
+                        key={cell.id}
+                        title={cell.id}
                         style={{
-                          position: "absolute",
-                          left: 6,
-                          top: 6,
-                          padding: "2px 6px",
-                          borderRadius: 999,
-                          background: "rgba(2, 6, 23, 0.75)",
-                          color: "#7dd3fc",
-                          fontSize: 11
+                          position:
+                            "absolute",
+                          left: `${
+                            (cell.x /
+                              1024) *
+                            100
+                          }%`,
+                          top: `${
+                            (cell.y /
+                              1024) *
+                            100
+                          }%`,
+                          width: `${
+                            (cell.width /
+                              1024) *
+                            100
+                          }%`,
+                          height: `${
+                            (cell.height /
+                              1024) *
+                            100
+                          }%`,
+                          border:
+                            "1px solid rgba(56, 189, 248, 0.8)",
+                          boxSizing:
+                            "border-box",
+                          pointerEvents:
+                            "none"
                         }}
                       >
-                        {cell.id}
-                      </span>
-                    </div>
-                  ))}
+                        <span
+                          style={{
+                            position:
+                              "absolute",
+                            left: 6,
+                            top: 6,
+                            padding:
+                              "2px 6px",
+                            borderRadius:
+                              999,
+                            background:
+                              "rgba(2, 6, 23, 0.75)",
+                            color:
+                              "#7dd3fc",
+                            fontSize: 11
+                          }}
+                        >
+                          {cell.id}
+                        </span>
+                      </div>
+                    )
+                  )}
                 </div>
               ) : (
                 <EmptyPreview text="Asset sheet will appear here." />
               )}
             </PreviewCard>
 
-            {gridInfo && gridCells.length > 0 && (
-              <div style={panelStyle}>
-                <h3 style={{ margin: "0 0 12px" }}>Split Result</h3>
+            {gridInfo &&
+              gridCells.length > 0 && (
+                <div style={panelStyle}>
+                  <h3
+                    style={{
+                      margin:
+                        "0 0 12px"
+                    }}
+                  >
+                    Split Result
+                  </h3>
 
-                <p
-                  style={{
-                    margin: "0 0 14px",
-                    color: "#94a3b8",
-                    fontSize: 14
-                  }}
-                >
-                  {gridInfo.rows} × {gridInfo.cols} grid / {gridCells.length}{" "}
-                  cells / {gridInfo.cellWidth}px × {gridInfo.cellHeight}px
-                </p>
+                  <p
+                    style={{
+                      margin:
+                        "0 0 14px",
+                      color: "#94a3b8",
+                      fontSize: 14
+                    }}
+                  >
+                    {gridInfo.rows} ×{" "}
+                    {gridInfo.cols} grid /{" "}
+                    {gridCells.length}{" "}
+                    cells /{" "}
+                    {gridInfo.cellWidth}px
+                    ×{" "}
+                    {gridInfo.cellHeight}px
+                  </p>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(120px, 1fr))",
-                    gap: 8
-                  }}
-                >
-                  {gridCells.map((cell) => (
-                    <div
-                      key={cell.id}
-                      style={{
-                        padding: 10,
-                        borderRadius: 12,
-                        background: "rgba(2, 6, 23, 0.55)",
-                        border: "1px solid rgba(148, 163, 184, 0.18)",
-                        fontSize: 12,
-                        color: "#cbd5e1"
-                      }}
-                    >
-                      <strong style={{ color: "#e5e7eb" }}>{cell.id}</strong>
-                      <br />
-                      x:{cell.x}, y:{cell.y}
-                      <br />
-                      w:{cell.width}, h:{cell.height}
-                    </div>
-                  ))}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(120px, 1fr))",
+                      gap: 8
+                    }}
+                  >
+                    {gridCells.map(
+                      (cell) => (
+                        <div
+                          key={cell.id}
+                          style={{
+                            padding: 10,
+                            borderRadius:
+                              12,
+                            background:
+                              "rgba(2, 6, 23, 0.55)",
+                            border:
+                              "1px solid rgba(148, 163, 184, 0.18)",
+                            fontSize: 12,
+                            color:
+                              "#cbd5e1"
+                          }}
+                        >
+                          <strong
+                            style={{
+                              color:
+                                "#e5e7eb"
+                            }}
+                          >
+                            {cell.id}
+                          </strong>
+                          <br />
+                          x:{cell.x}, y:
+                          {cell.y}
+                          <br />
+                          w:{cell.width}, h:
+                          {cell.height}
+                        </div>
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {zipUrl && (
               <div style={panelStyle}>
-                <h3 style={{ margin: "0 0 12px" }}>Exported Assets</h3>
+                <h3
+                  style={{
+                    margin: "0 0 12px"
+                  }}
+                >
+                  Exported Assets
+                </h3>
 
                 <a
                   href={zipUrl}
                   download
                   style={{
-                    display: "inline-block",
-                    padding: "12px 16px",
+                    display:
+                      "inline-block",
+                    padding:
+                      "12px 16px",
                     borderRadius: 14,
-                    background: "linear-gradient(135deg, #38bdf8, #8b5cf6)",
+                    background:
+                      "linear-gradient(135deg, #38bdf8, #8b5cf6)",
                     color: "white",
                     fontWeight: 800,
-                    textDecoration: "none"
+                    textDecoration:
+                      "none"
                   }}
                 >
                   Download ZIP
@@ -561,19 +937,32 @@ export default function Home() {
 
                 <p
                   style={{
-                    margin: "12px 0 0",
+                    margin:
+                      "12px 0 0",
                     color: "#94a3b8",
                     fontSize: 13
                   }}
                 >
-                  {exportedAssets.length} transparent PNG assets exported.
+                  {
+                    exportedAssets.length
+                  }{" "}
+                  transparent PNG assets
+                  exported.
                 </p>
               </div>
             )}
 
-            {exportedAssets.length > 0 && (
+            {exportedAssets.length >
+              0 && (
               <div style={panelStyle}>
-                <h3 style={{ margin: "0 0 12px" }}>PNG Assets</h3>
+                <h3
+                  style={{
+                    margin:
+                      "0 0 12px"
+                  }}
+                >
+                  PNG Assets
+                </h3>
 
                 <div
                   style={{
@@ -583,31 +972,46 @@ export default function Home() {
                     gap: 12
                   }}
                 >
-                  {exportedAssets.map((asset) => (
-                    <div key={asset.id} style={checkerCardStyle}>
-                      <img
-                        src={asset.imageUrl}
-                        alt={asset.id}
-                        style={{
-                          width: "100%",
-                          aspectRatio: "1 / 1",
-                          objectFit: "contain",
-                          display: "block"
-                        }}
-                      />
-
-                      <p
-                        style={{
-                          margin: "8px 0 0",
-                          color: "#cbd5e1",
-                          fontSize: 12,
-                          textAlign: "center"
-                        }}
+                  {exportedAssets.map(
+                    (asset) => (
+                      <div
+                        key={asset.id}
+                        style={
+                          checkerCardStyle
+                        }
                       >
-                        {asset.id}
-                      </p>
-                    </div>
-                  ))}
+                        <img
+                          src={
+                            asset.imageUrl
+                          }
+                          alt={asset.id}
+                          style={{
+                            width: "100%",
+                            aspectRatio:
+                              "1 / 1",
+                            objectFit:
+                              "contain",
+                            display:
+                              "block"
+                          }}
+                        />
+
+                        <p
+                          style={{
+                            margin:
+                              "8px 0 0",
+                            color:
+                              "#cbd5e1",
+                            fontSize: 12,
+                            textAlign:
+                              "center"
+                          }}
+                        >
+                          {asset.id}
+                        </p>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             )}
@@ -623,25 +1027,40 @@ function PreviewCard({
   children
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section
       style={{
         padding: 18,
         borderRadius: 24,
-        border: "1px solid rgba(148, 163, 184, 0.22)",
-        background: "rgba(15, 23, 42, 0.72)",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.22)"
+        border:
+          "1px solid rgba(148, 163, 184, 0.22)",
+        background:
+          "rgba(15, 23, 42, 0.72)",
+        boxShadow:
+          "0 24px 80px rgba(0,0,0,0.22)"
       }}
     >
-      <h2 style={{ margin: "0 0 14px", fontSize: 20 }}>{title}</h2>
+      <h2
+        style={{
+          margin: "0 0 14px",
+          fontSize: 20
+        }}
+      >
+        {title}
+      </h2>
+
       {children}
     </section>
   );
 }
 
-function EmptyPreview({ text }: { text: string }) {
+function EmptyPreview({
+  text
+}: {
+  text: string;
+}) {
   return (
     <div
       style={{
@@ -649,7 +1068,8 @@ function EmptyPreview({ text }: { text: string }) {
         display: "grid",
         placeItems: "center",
         borderRadius: 18,
-        border: "1px dashed rgba(148, 163, 184, 0.28)",
+        border:
+          "1px dashed rgba(148, 163, 184, 0.28)",
         color: "#64748b",
         background:
           "linear-gradient(135deg, rgba(15,23,42,0.55), rgba(30,41,59,0.35))"
@@ -660,7 +1080,7 @@ function EmptyPreview({ text }: { text: string }) {
   );
 }
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   display: "grid",
   gap: 6,
   color: "#cbd5e1",
@@ -668,44 +1088,51 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 700
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "11px 12px",
   borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.24)",
-  background: "rgba(2, 6, 23, 0.55)",
+  border:
+    "1px solid rgba(148, 163, 184, 0.24)",
+  background:
+    "rgba(2, 6, 23, 0.55)",
   color: "#e5e7eb",
   outline: "none"
 };
 
-const textareaStyle: React.CSSProperties = {
+const textareaStyle: CSSProperties = {
   ...inputStyle,
   resize: "vertical",
   lineHeight: 1.5
 };
 
-const imageStyle: React.CSSProperties = {
+const imageStyle: CSSProperties = {
   display: "block",
   width: "100%",
   borderRadius: 18,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
+  border:
+    "1px solid rgba(148, 163, 184, 0.22)",
   background: "#020617"
 };
 
-const panelStyle: React.CSSProperties = {
+const panelStyle: CSSProperties = {
   padding: 18,
   borderRadius: 20,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.72)"
+  border:
+    "1px solid rgba(148, 163, 184, 0.22)",
+  background:
+    "rgba(15, 23, 42, 0.72)"
 };
 
-const checkerCardStyle: React.CSSProperties = {
+const checkerCardStyle: CSSProperties = {
   padding: 10,
   borderRadius: 14,
   background:
     "linear-gradient(45deg, rgba(148,163,184,0.18) 25%, transparent 25%), linear-gradient(-45deg, rgba(148,163,184,0.18) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(148,163,184,0.18) 75%), linear-gradient(-45deg, transparent 75%, rgba(148,163,184,0.18) 75%)",
   backgroundSize: "18px 18px",
-  backgroundPosition: "0 0, 0 9px, 9px -9px, -9px 0px",
-  border: "1px solid rgba(148, 163, 184, 0.18)"
+  backgroundPosition:
+    "0 0, 0 9px, 9px -9px, -9px 0px",
+  border:
+    "1px solid rgba(148, 163, 184, 0.18)"
 };
