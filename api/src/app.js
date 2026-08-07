@@ -100,7 +100,9 @@ app.get("/", (req, res) => {
 // ルートを接続
 app.use("/projects", projectRoutes);
 app.use("/grid-splits", gridRoutes);
-app.use("/dev", devRoutes);
+if (process.env.NODE_ENV !== "production") {
+  app.use("/dev", devRoutes);
+}
 
 // 存在しないAPIへの共通404レスポンス
 app.use((req, res) => {
