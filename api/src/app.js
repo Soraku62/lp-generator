@@ -25,6 +25,10 @@ const allowedOrigins = (
   .split(",")
   .map((origin) => origin.trim());
 
+  const {
+  sendError
+} = require("./utils/apiResponse");
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -91,6 +95,20 @@ app.get("/", (req, res) => {
     },
     error: null
   });
+});
+
+// 存在しないAPIへの共通404レスポンス
+app.use((req, res) => {
+  return sendError(
+    res,
+    404,
+    "ROUTE_NOT_FOUND",
+    "Route not found.",
+    {
+      method: req.method,
+      path: req.originalUrl
+    }
+  );
 });
 
 // ルートを接続

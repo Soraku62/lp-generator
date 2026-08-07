@@ -1,152 +1,34 @@
 "use client";
 
 import { useState } from "react";
+
+import { AssetSheetPreview } from "../components/AssetSheetPreview";
+import { ExportPanel } from "../components/ExportPanel";
+import { ExportedAssetGrid } from "../components/ExportedAssetGrid";
+import { ProjectForm } from "../components/ProjectForm";
+import {
+  EmptyPreview,
+  PreviewCard
+} from "../components/PreviewCard";
+import { SplitResult } from "../components/SplitResult";
+import { imageStyle } from "../components/styles";
+import {
+  getApiErrorMessage,
+  readJsonResponse
+} from "../lib/api";
 import type {
-  CSSProperties,
-  ReactNode
-} from "react";
+  AssetExportData,
+  AssetSheetGenerationData,
+  ExportedAsset,
+  GridCell,
+  GridInfo,
+  GridSplitData,
+  ImageGenerationData,
+  ProjectCreateData
+} from "../types/api";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
-
-type ApiError = {
-  code: string;
-  message: string;
-  details?: Record<string, unknown> | null;
-};
-
-type ApiResult<T> =
-  | {
-      success: true;
-      data: T;
-      error: null;
-    }
-  | {
-      success: false;
-      data: null;
-      error: ApiError;
-    };
-
-type ProjectCreateData = {
-  id: number;
-  accessToken: string;
-};
-
-type ImageGenerationData = {
-  id: number;
-  imageUrl: string;
-  model: string;
-  prompt: string;
-  generatedAt: string;
-};
-
-type AssetSheetGenerationData = {
-  id: number;
-  assetSheetUrl: string;
-  model: string;
-  prompt: string;
-  grid: GridInfo;
-  generatedAt: string;
-};
-
-type GridCell = {
-  id: string;
-  row: number;
-  col: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-type GridInfo = {
-  rows: number;
-  cols: number;
-  imageWidth: number;
-  imageHeight: number;
-  cellWidth: number;
-  cellHeight: number;
-};
-
-type GridSplitData = {
-  imageUrl: string;
-  grid: GridInfo;
-  cells: GridCell[];
-};
-
-type ExportedAsset = {
-  id: string;
-  row: number;
-  col: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fileName: string;
-  imageUrl: string;
-};
-
-type AssetExportData = {
-  projectId: number;
-  assets: ExportedAsset[];
-  zipUrl: string;
-  exportedAt: string;
-};
-
-async function readJsonResponse<T>(
-  response: Response
-): Promise<ApiResult<T>> {
-  const text = await response.text();
-
-  try {
-    return JSON.parse(text) as ApiResult<T>;
-  } catch {
-    throw new Error(
-      `API did not return JSON. Status: ${
-        response.status
-      }. Response preview: ${text.slice(0, 200)}`
-    );
-  }
-}
-
-function getApiErrorMessage(
-  result: ApiResult<unknown>,
-  fallbackMessage: string
-): string {
-  if (result.success) {
-    return fallbackMessage;
-  }
-
-  const details = result.error.details;
-
-  if (
-    details &&
-    typeof details === "object"
-  ) {
-    const body = details.body;
-
-    if (
-      typeof body === "string" &&
-      body.trim()
-    ) {
-      return body;
-    }
-
-    const message = details.message;
-
-    if (
-      typeof message === "string" &&
-      message.trim()
-    ) {
-      return message;
-    }
-  }
-
-  return (
-    result.error.message ||
-    fallbackMessage
-  );
-}
 
 export default function Home() {
   const [serviceName, setServiceName] =
@@ -563,176 +445,23 @@ export default function Home() {
             alignItems: "start"
           }}
         >
-          <div
-            style={{
-              padding: 22,
-              border:
-                "1px solid rgba(148, 163, 184, 0.22)",
-              borderRadius: 24,
-              background:
-                "rgba(15, 23, 42, 0.72)",
-              boxShadow:
-                "0 24px 80px rgba(0,0,0,0.28)"
-            }}
-          >
-            <h2
-              style={{
-                margin: "0 0 18px",
-                fontSize: 22
-              }}
-            >
-              Input
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 14
-              }}
-            >
-              <label style={labelStyle}>
-                Service Name
-                <input
-                  value={serviceName}
-                  onChange={(event) =>
-                    setServiceName(
-                      event.target.value
-                    )
-                  }
-                  style={inputStyle}
-                />
-              </label>
-
-              <label style={labelStyle}>
-                Concept
-                <textarea
-                  value={concept}
-                  onChange={(event) =>
-                    setConcept(
-                      event.target.value
-                    )
-                  }
-                  rows={4}
-                  style={textareaStyle}
-                />
-              </label>
-
-              <label style={labelStyle}>
-                Target User
-                <textarea
-                  value={targetUser}
-                  onChange={(event) =>
-                    setTargetUser(
-                      event.target.value
-                    )
-                  }
-                  rows={3}
-                  style={textareaStyle}
-                />
-              </label>
-
-              <label style={labelStyle}>
-                Tone
-                <input
-                  value={tone}
-                  onChange={(event) =>
-                    setTone(
-                      event.target.value
-                    )
-                  }
-                  style={inputStyle}
-                />
-              </label>
-
-              <label style={labelStyle}>
-                Main Message
-                <textarea
-                  value={mainMessage}
-                  onChange={(event) =>
-                    setMainMessage(
-                      event.target.value
-                    )
-                  }
-                  rows={3}
-                  style={textareaStyle}
-                />
-              </label>
-
-              <button
-                onClick={
-                  handleGenerateAll
-                }
-                disabled={loading}
-                style={{
-                  marginTop: 8,
-                  padding: "14px 16px",
-                  border: "none",
-                  borderRadius: 14,
-                  background: loading
-                    ? "linear-gradient(135deg, #475569, #334155)"
-                    : "linear-gradient(135deg, #38bdf8, #8b5cf6)",
-                  color: "white",
-                  fontWeight: 800,
-                  fontSize: 15,
-                  cursor: loading
-                    ? "not-allowed"
-                    : "pointer",
-                  boxShadow:
-                    "0 16px 40px rgba(59,130,246,0.35)"
-                }}
-              >
-                {loading
-                  ? "Generating..."
-                  : "Generate LP + Asset Sheet + Export ZIP"}
-              </button>
-
-              {currentStep && (
-                <p
-                  style={{
-                    margin: "4px 0 0",
-                    color:
-                      currentStep ===
-                      "Failed"
-                        ? "#fca5a5"
-                        : "#7dd3fc",
-                    fontSize: 13
-                  }}
-                >
-                  Status: {currentStep}
-                </p>
-              )}
-
-              {projectId !== null && (
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#94a3b8",
-                    fontSize: 13
-                  }}
-                >
-                  Project ID: {projectId}
-                </p>
-              )}
-
-              {error && (
-                <pre
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    margin: "8px 0 0",
-                    padding: 12,
-                    borderRadius: 12,
-                    background:
-                      "rgba(127, 29, 29, 0.35)",
-                    color: "#fecaca",
-                    fontSize: 12,
-                    lineHeight: 1.5
-                  }}
-                >
-                  {error}
-                </pre>
-              )}
-            </div>
-          </div>
+          <ProjectForm
+            serviceName={serviceName}
+            setServiceName={setServiceName}
+            concept={concept}
+            setConcept={setConcept}
+            targetUser={targetUser}
+            setTargetUser={setTargetUser}
+            tone={tone}
+            setTone={setTone}
+            mainMessage={mainMessage}
+            setMainMessage={setMainMessage}
+            loading={loading}
+            currentStep={currentStep}
+            projectId={projectId}
+            error={error}
+            onGenerate={handleGenerateAll}
+          />
 
           <div
             style={{
@@ -742,6 +471,7 @@ export default function Home() {
           >
             <PreviewCard title="Landing Page Image">
               {lpImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={lpImageUrl}
                   alt="Generated LP"
@@ -752,387 +482,27 @@ export default function Home() {
               )}
             </PreviewCard>
 
-            <PreviewCard title="Asset Sheet">
-              {assetSheetUrl ? (
-                <div
-                  style={{
-                    position: "relative",
-                    width: "100%"
-                  }}
-                >
-                  <img
-                    src={assetSheetUrl}
-                    alt="Generated asset sheet"
-                    style={imageStyle}
-                  />
+            <AssetSheetPreview
+              assetSheetUrl={assetSheetUrl}
+              gridCells={gridCells}
+            />
 
-                  {gridCells.map(
-                    (cell) => (
-                      <div
-                        key={cell.id}
-                        title={cell.id}
-                        style={{
-                          position:
-                            "absolute",
-                          left: `${
-                            (cell.x /
-                              1024) *
-                            100
-                          }%`,
-                          top: `${
-                            (cell.y /
-                              1024) *
-                            100
-                          }%`,
-                          width: `${
-                            (cell.width /
-                              1024) *
-                            100
-                          }%`,
-                          height: `${
-                            (cell.height /
-                              1024) *
-                            100
-                          }%`,
-                          border:
-                            "1px solid rgba(56, 189, 248, 0.8)",
-                          boxSizing:
-                            "border-box",
-                          pointerEvents:
-                            "none"
-                        }}
-                      >
-                        <span
-                          style={{
-                            position:
-                              "absolute",
-                            left: 6,
-                            top: 6,
-                            padding:
-                              "2px 6px",
-                            borderRadius:
-                              999,
-                            background:
-                              "rgba(2, 6, 23, 0.75)",
-                            color:
-                              "#7dd3fc",
-                            fontSize: 11
-                          }}
-                        >
-                          {cell.id}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
-              ) : (
-                <EmptyPreview text="Asset sheet will appear here." />
-              )}
-            </PreviewCard>
+            <SplitResult
+              gridInfo={gridInfo}
+              gridCells={gridCells}
+            />
 
-            {gridInfo &&
-              gridCells.length > 0 && (
-                <div style={panelStyle}>
-                  <h3
-                    style={{
-                      margin:
-                        "0 0 12px"
-                    }}
-                  >
-                    Split Result
-                  </h3>
+            <ExportPanel
+              zipUrl={zipUrl}
+              assetCount={exportedAssets.length}
+            />
 
-                  <p
-                    style={{
-                      margin:
-                        "0 0 14px",
-                      color: "#94a3b8",
-                      fontSize: 14
-                    }}
-                  >
-                    {gridInfo.rows} ×{" "}
-                    {gridInfo.cols} grid /{" "}
-                    {gridCells.length}{" "}
-                    cells /{" "}
-                    {gridInfo.cellWidth}px
-                    ×{" "}
-                    {gridInfo.cellHeight}px
-                  </p>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fill, minmax(120px, 1fr))",
-                      gap: 8
-                    }}
-                  >
-                    {gridCells.map(
-                      (cell) => (
-                        <div
-                          key={cell.id}
-                          style={{
-                            padding: 10,
-                            borderRadius:
-                              12,
-                            background:
-                              "rgba(2, 6, 23, 0.55)",
-                            border:
-                              "1px solid rgba(148, 163, 184, 0.18)",
-                            fontSize: 12,
-                            color:
-                              "#cbd5e1"
-                          }}
-                        >
-                          <strong
-                            style={{
-                              color:
-                                "#e5e7eb"
-                            }}
-                          >
-                            {cell.id}
-                          </strong>
-                          <br />
-                          x:{cell.x}, y:
-                          {cell.y}
-                          <br />
-                          w:{cell.width}, h:
-                          {cell.height}
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-              )}
-
-            {zipUrl && (
-              <div style={panelStyle}>
-                <h3
-                  style={{
-                    margin: "0 0 12px"
-                  }}
-                >
-                  Exported Assets
-                </h3>
-
-                <a
-                  href={zipUrl}
-                  download
-                  style={{
-                    display:
-                      "inline-block",
-                    padding:
-                      "12px 16px",
-                    borderRadius: 14,
-                    background:
-                      "linear-gradient(135deg, #38bdf8, #8b5cf6)",
-                    color: "white",
-                    fontWeight: 800,
-                    textDecoration:
-                      "none"
-                  }}
-                >
-                  Download ZIP
-                </a>
-
-                <p
-                  style={{
-                    margin:
-                      "12px 0 0",
-                    color: "#94a3b8",
-                    fontSize: 13
-                  }}
-                >
-                  {
-                    exportedAssets.length
-                  }{" "}
-                  transparent PNG assets
-                  exported.
-                </p>
-              </div>
-            )}
-
-            {exportedAssets.length >
-              0 && (
-              <div style={panelStyle}>
-                <h3
-                  style={{
-                    margin:
-                      "0 0 12px"
-                  }}
-                >
-                  PNG Assets
-                </h3>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(120px, 1fr))",
-                    gap: 12
-                  }}
-                >
-                  {exportedAssets.map(
-                    (asset) => (
-                      <div
-                        key={asset.id}
-                        style={
-                          checkerCardStyle
-                        }
-                      >
-                        <img
-                          src={
-                            asset.imageUrl
-                          }
-                          alt={asset.id}
-                          style={{
-                            width: "100%",
-                            aspectRatio:
-                              "1 / 1",
-                            objectFit:
-                              "contain",
-                            display:
-                              "block"
-                          }}
-                        />
-
-                        <p
-                          style={{
-                            margin:
-                              "8px 0 0",
-                            color:
-                              "#cbd5e1",
-                            fontSize: 12,
-                            textAlign:
-                              "center"
-                          }}
-                        >
-                          {asset.id}
-                        </p>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
+            <ExportedAssetGrid
+              assets={exportedAssets}
+            />
           </div>
         </section>
       </div>
     </main>
   );
 }
-
-function PreviewCard({
-  title,
-  children
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      style={{
-        padding: 18,
-        borderRadius: 24,
-        border:
-          "1px solid rgba(148, 163, 184, 0.22)",
-        background:
-          "rgba(15, 23, 42, 0.72)",
-        boxShadow:
-          "0 24px 80px rgba(0,0,0,0.22)"
-      }}
-    >
-      <h2
-        style={{
-          margin: "0 0 14px",
-          fontSize: 20
-        }}
-      >
-        {title}
-      </h2>
-
-      {children}
-    </section>
-  );
-}
-
-function EmptyPreview({
-  text
-}: {
-  text: string;
-}) {
-  return (
-    <div
-      style={{
-        minHeight: 260,
-        display: "grid",
-        placeItems: "center",
-        borderRadius: 18,
-        border:
-          "1px dashed rgba(148, 163, 184, 0.28)",
-        color: "#64748b",
-        background:
-          "linear-gradient(135deg, rgba(15,23,42,0.55), rgba(30,41,59,0.35))"
-      }}
-    >
-      {text}
-    </div>
-  );
-}
-
-const labelStyle: CSSProperties = {
-  display: "grid",
-  gap: 6,
-  color: "#cbd5e1",
-  fontSize: 13,
-  fontWeight: 700
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "11px 12px",
-  borderRadius: 12,
-  border:
-    "1px solid rgba(148, 163, 184, 0.24)",
-  background:
-    "rgba(2, 6, 23, 0.55)",
-  color: "#e5e7eb",
-  outline: "none"
-};
-
-const textareaStyle: CSSProperties = {
-  ...inputStyle,
-  resize: "vertical",
-  lineHeight: 1.5
-};
-
-const imageStyle: CSSProperties = {
-  display: "block",
-  width: "100%",
-  borderRadius: 18,
-  border:
-    "1px solid rgba(148, 163, 184, 0.22)",
-  background: "#020617"
-};
-
-const panelStyle: CSSProperties = {
-  padding: 18,
-  borderRadius: 20,
-  border:
-    "1px solid rgba(148, 163, 184, 0.22)",
-  background:
-    "rgba(15, 23, 42, 0.72)"
-};
-
-const checkerCardStyle: CSSProperties = {
-  padding: 10,
-  borderRadius: 14,
-  background:
-    "linear-gradient(45deg, rgba(148,163,184,0.18) 25%, transparent 25%), linear-gradient(-45deg, rgba(148,163,184,0.18) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(148,163,184,0.18) 75%), linear-gradient(-45deg, transparent 75%, rgba(148,163,184,0.18) 75%)",
-  backgroundSize: "18px 18px",
-  backgroundPosition:
-    "0 0, 0 9px, 9px -9px, -9px 0px",
-  border:
-    "1px solid rgba(148, 163, 184, 0.18)"
-};
